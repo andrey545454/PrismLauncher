@@ -34,7 +34,7 @@ class ListViewDelegate : public QStyledItemDelegate {
     void setModelData(QWidget* editor, QAbstractItemModel* model, const QModelIndex& index) const override;
 
    signals:
-    void textChanged(QString before, QString after) const;
+    void renameRequested(const QModelIndex& index, const QString& oldName, const QString& newName) const;
 
    private slots:
     void editingDone();

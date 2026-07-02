@@ -301,22 +301,30 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWi
         view->setFrameShape(QFrame::NoFrame);
         // do not show ugly blue border on the mac
         view->setAttribute(Qt::WA_MacShowFocusRect, false);
-        connect(delegate, &ListViewDelegate::textChanged, this, [this](QString before, QString after) {
-            if (auto newRoot = askToUpdateInstanceDirName(m_selectedInstance, before, after, this); !newRoot.isEmpty()) {
-                auto oldID = m_selectedInstance->id();
-                auto newID = QFileInfo(newRoot).fileName();
-                QString origGroup(APPLICATION->instances()->getInstanceGroup(oldID));
-                bool syncGroup = origGroup != GroupId() && oldID != newID;
-                if (syncGroup)
-                    APPLICATION->instances()->setInstanceGroup(oldID, GroupId());
-
-                refreshInstances();
-                setSelectedInstanceById(newID);
-
-                if (syncGroup)
-                    APPLICATION->instances()->setInstanceGroup(newID, origGroup);
-            }
-        });
+        connect(delegate, &ListViewDelegate::renameRequested, this,
+                [this](const QModelIndex& index, const QString& before, const QString& after) {
+                    if (!m_selectedInstance)
+                        return;
+                    auto oldID = m_selectedInstance->id();
+                    QString origGroup(APPLICATION->instances()->getInstanceGroup(oldID));
+                    // Ask about the physical folder rename before committing the display name.
+                    // This lets Cancel abort the whole rename operation.
+                    auto newRoot = askToUpdateInstanceDirName(m_selectedInstance, before, after, this);
+                    if (!newRoot.has_value())
+                        return;
+                    // The rename was accepted. Commit the display name change now.
+                    view->model()->setData(index, after);
+                    if (!newRoot->isEmpty()) {
+                        auto newID = QFileInfo(*newRoot).fileName();
+                        bool syncGroup = origGroup != GroupId() && oldID != newID;
+                        if (syncGroup)
+                            APPLICATION->instances()->setInstanceGroup(oldID, GroupId());
+                        refreshInstances();
+                        setSelectedInstanceById(newID);
+                        if (syncGroup)
+                            APPLICATION->instances()->setInstanceGroup(newID, origGroup);
+                    }
+                });
 
         view->installEventFilter(this);
         view->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -655,7 +663,7 @@ void MainWindow::repopulateAccountsMenu()
 
     auto accounts = APPLICATION->accounts();
     MinecraftAccountPtr defaultAccount = accounts->defaultAccount();
-    
+
     bool canChangeSkin = defaultAccount && (defaultAccount->accountType() == AccountType::MSA) && !defaultAccount->isActive();
     ui->actionManageSkins->setEnabled(canChangeSkin);
 

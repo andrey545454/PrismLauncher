@@ -42,7 +42,7 @@
 #include "InstanceList.h"
 #include "ui/dialogs/CustomMessageBox.h"
 
-QString askToUpdateInstanceDirName(BaseInstance* instance, const QString& oldName, const QString& newName, QWidget* parent)
+std::optional<QString> askToUpdateInstanceDirName(BaseInstance* instance, const QString& oldName, const QString& newName, QWidget* parent)
 {
     if (oldName == newName)
         return QString();
@@ -58,6 +58,24 @@ QString askToUpdateInstanceDirName(BaseInstance* instance, const QString& oldNam
         return QString();
     if (oldRoot == FS::PathCombine(QFileInfo(oldRoot).dir().absolutePath(), newName))
         return QString();
+
+    if (instance->isRunning()) {
+        // Renaming the folder of a running instance can break the game process.
+        // Let the user either rename only the display name or cancel the operation.
+        auto dialog = CustomMessageBox::selectable(parent, QObject::tr("Instance is running"),
+                                                   QObject::tr("This instance is currently running.\n\n"
+                                                               "Renaming its folder while the game is running is not safe.\n"
+                                                               "You can rename only the instance name now, or cancel and "
+                                                               "try again after closing the game."),
+                                                   QMessageBox::Warning, QMessageBox::Ok | QMessageBox::Cancel, QMessageBox::Cancel);
+
+        dialog->button(QMessageBox::Ok)->setText(QObject::tr("Rename name only"));
+
+        if (dialog->exec() == QMessageBox::Cancel)
+            return std::nullopt;
+
+        return QString();
+    }
 
     // Check for conflict
     if (QDir(newRoot).exists()) {
